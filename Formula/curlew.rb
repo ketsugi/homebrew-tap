@@ -1,9 +1,9 @@
 class Curlew < Formula
   desc "Inspect before you execute. A safe wrapper for curl|bash"
   homepage "https://github.com/ketsugi/curlew"
-  version "0.1.0"
+  version "0.2.0"
   url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew"
-  sha256 "b969e0bb2133a89f16e0698bab7a4b3f7e8fe2dd039b2778e6a41ac3885fd378"
+  sha256 "6d3f8a304379cdf29ce58135d8c2be9c624fd63dee1573da3c601401b3e7bdca"
   license "MIT"
 
   def install
