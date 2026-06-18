@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Update a Homebrew formula's version and sha256 from a curlew release.
-# Reuses the checksum the release workflow already published, so the formula
-# pins exactly the bytes users verify rather than a recomputed hash.
+# Update a Homebrew formula's version and sha256 values from a curlew release.
+# Downloads the consolidated checksums file and updates each platform's hash.
 #
 # Required env:
 #   FORMULA  formula name, e.g. curlew
@@ -15,15 +14,65 @@ set -euo pipefail
 formula_file="Formula/$FORMULA.rb"
 [[ -f "$formula_file" ]] || { echo "Error: $formula_file not found" >&2; exit 1; }
 
-shasum=$(
-  curl -fsSL "https://github.com/ketsugi/$FORMULA/releases/download/$VERSION/$FORMULA.sha256" \
-    | awk '{ print $1 }'
-)
-[[ "$shasum" =~ ^[0-9a-f]{64}$ ]] || { echo "Error: invalid checksum: '$shasum'" >&2; exit 1; }
+checksums_url="https://github.com/ketsugi/$FORMULA/releases/download/$VERSION/checksums.sha256"
+checksums=$(curl -fsSL "$checksums_url") || { echo "Error: failed to fetch checksums" >&2; exit 1; }
 
-# GitHub runners are Linux; GNU sed -i is all we need.
-# version field is the tag without the leading v; url interpolates v#{version}.
-sed -i "s/version \".*\"/version \"${VERSION#v}\"/" "$formula_file"
-sed -i "s/sha256 \".*\"/sha256 \"$shasum\"/" "$formula_file"
+get_sha() {
+  local artifact="$1"
+  local sha
+  sha=$(echo "$checksums" | grep "$artifact" | awk '{ print $1 }')
+  [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "Error: no valid checksum for $artifact" >&2; exit 1; }
+  echo "$sha"
+}
 
-echo "Updated $formula_file to ${VERSION#v} ($shasum)"
+sha_darwin_arm64=$(get_sha "curlew-darwin-arm64")
+sha_darwin_amd64=$(get_sha "curlew-darwin-amd64")
+sha_linux_arm64=$(get_sha "curlew-linux-arm64")
+sha_linux_amd64=$(get_sha "curlew-linux-amd64")
+
+version_bare="${VERSION#v}"
+
+# Build the formula from scratch to avoid fragile sed on multi-sha256 files
+cat > "$formula_file" <<RUBY
+class Curlew < Formula
+  desc "Inspect before you execute. A safe wrapper for curl|bash"
+  homepage "https://github.com/ketsugi/curlew"
+  version "$version_bare"
+  license "MIT"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-darwin-arm64"
+      sha256 "$sha_darwin_arm64"
+    else
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-darwin-amd64"
+      sha256 "$sha_darwin_amd64"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-linux-arm64"
+      sha256 "$sha_linux_arm64"
+    else
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-linux-amd64"
+      sha256 "$sha_linux_amd64"
+    end
+  end
+
+  def install
+    binary = Dir["curlew-*"].first || "curlew"
+    bin.install binary => "curlew"
+  end
+
+  test do
+    assert_match "curlew #{version}", shell_output("#{bin}/curlew --version")
+  end
+end
+RUBY
+
+echo "Updated $formula_file to $version_bare"
+echo "  darwin-arm64: $sha_darwin_arm64"
+echo "  darwin-amd64: $sha_darwin_amd64"
+echo "  linux-arm64:  $sha_linux_arm64"
+echo "  linux-amd64:  $sha_linux_amd64"

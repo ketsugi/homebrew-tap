@@ -2,12 +2,31 @@ class Curlew < Formula
   desc "Inspect before you execute. A safe wrapper for curl|bash"
   homepage "https://github.com/ketsugi/curlew"
   version "0.2.2"
-  url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew"
-  sha256 "8309d30ee3f811e4ab07b4981845875a5e57ea80b91d546931128fd9d7e482d3"
   license "MIT"
 
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-darwin-arm64"
+      sha256 "PLACEHOLDER"
+    else
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-darwin-amd64"
+      sha256 "PLACEHOLDER"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-linux-arm64"
+      sha256 "PLACEHOLDER"
+    else
+      url "https://github.com/ketsugi/curlew/releases/download/v#{version}/curlew-linux-amd64"
+      sha256 "PLACEHOLDER"
+    end
+  end
+
   def install
-    bin.install "curlew"
+    binary = Dir["curlew-*"].first || "curlew"
+    bin.install binary => "curlew"
   end
 
   test do
